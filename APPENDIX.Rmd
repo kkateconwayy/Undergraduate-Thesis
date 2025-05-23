@@ -1,0 +1,1751 @@
+---
+title: "APPENDIX"
+author: "Kate Conway"
+date: "2024"
+output: word_document
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggformula); library(Stat2Data); library(tidyverse); library(gridExtra); library(ggeffects); library(ggplot2); library(car); library(latticeExtra); library(mosaic); library(reshape2); library(dplyr); library(corrr);library(sjPlot); library(sjmisc); library(sjlabelled);library(kableExtra); library(knitr); library(leaps); library(tree); library(rpart); library(rpart.plot); library(randomForest); library(caret); library(dplyr); library(partykit); library(randomForestExplainer); library(mice); library(ranger); library(partykit); library(randomForestExplainer); library(VIM); library(tidyr); library(ranger); library(car); library(corrplot); library(ggcorrplot); library(mlr); library(mlr3); library(mlr3learners); library(mlr3measures); library(mlr3viz);
+
+pulse2021_puf_27 <- read.csv("~/Desktop/IS/HPS_Week27_PUF_CSV/pulse2021_puf_27.csv", header=TRUE)
+```
+
+1. IRIS EXAMPLES
+
+Load Iris dataset
+```{r}
+data(iris)
+```
+
+Create and plot Simple Linear Model
+```{r}
+simple_model <- lm(Petal.Length ~ Sepal.Length, data=iris)
+iris$PetalLength_Pred_Simple <- predict(simple_model)
+
+summary(simple_model)
+
+ggplot(iris, aes(x=Sepal.Length, y=Petal.Length, color = Species)) +
+  geom_point() +
+  geom_line(aes(y=PetalLength_Pred_Simple), color="red") +
+  ggtitle("Simple Linear Regression: Petal Length vs Sepal Length") +
+  xlab("Sepal Length") +
+  ylab("Petal Length")
+```
+
+Create and plot Multiple Linear Model
+```{r}
+multiple_model <- lm(Petal.Length ~ Sepal.Length + Sepal.Width + Petal.Width, data=iris)
+iris$PetalLength_Pred_Multiple <- predict(multiple_model)
+
+summary(multiple_model)
+
+ggplot(iris, aes(x=Petal.Length, y=PetalLength_Pred_Multiple, color = Species)) +
+  geom_point() +
+  geom_abline(slope=1, intercept=0, color="red") +
+  ggtitle("Multiple Linear Regression: Predicted vs Actual Petal Length") +
+  xlab("Actual Petal Length") +
+  ylab("Predicted Petal Length")
+```
+
+Calculate residuals and plot
+```{r}
+iris$residuals <- residuals(multiple_model)
+
+pred_vs_actual_plot <- ggplot(iris, aes(x=Petal.Length, y=PetalLength_Pred_Multiple, color=Species)) +
+  geom_point() +
+  geom_abline(slope=1, intercept=0, color="red") +
+  ggtitle("Multiple Linear Regression: Predicted vs Actual Petal Length") +
+  xlab("Actual Petal Length") +
+  ylab("Predicted Petal Length")
+
+residuals_vs_fitted_plot <- ggplot(iris, aes(x=PetalLength_Pred_Multiple, y=residuals, color=Species)) +
+  geom_point() +
+  geom_hline(yintercept=0, linetype="dashed", color="red") +
+  ggtitle("Residuals vs Fitted Values") +
+  xlab("Fitted Values") +
+  ylab("Residuals")
+
+qq_plot <- ggplot(iris, aes(sample=residuals)) +
+  stat_qq() +
+  stat_qq_line(color="red") +
+  ggtitle("Q-Q Plot of Residuals")
+
+residuals_vs_leverage_plot <- ggplot(iris, aes(x=hatvalues(multiple_model), y=residuals, color=Species)) +
+  geom_point() +
+  geom_smooth(method="loess") +
+  geom_hline(yintercept=0, linetype="dashed", color="red") +
+  ggtitle("Residuals vs Leverage") +
+  xlab("Leverage") +
+  ylab("Residuals")
+
+grid.arrange(pred_vs_actual_plot, residuals_vs_fitted_plot, qq_plot, residuals_vs_leverage_plot, ncol=2, nrow=2)
+```
+
+Create and plot Decision Tree Model, calculate R^2
+```{r}
+tree_model <- rpart(Petal.Length ~ Sepal.Length + Sepal.Width + Petal.Width, data=iris)
+iris$PetalLength_Pred_Tree <- predict(tree_model, newdata=iris)
+
+r_squared <- cor(iris$Petal.Length, iris$PetalLength_Pred_Tree)^2
+print(paste("R-squared: ", r_squared))
+
+rpart.plot(tree_model, main="Decision Tree: Petal Length Prediction", type=3, extra=101, under=TRUE, fallen.leaves=TRUE,
+           box.palette = NULL, cex=0.7)
+```
+
+Select random example observation and print values
+```{r}
+random_index <- sample(1:nrow(iris), 1)
+random_observation <- iris[random_index, ]
+
+random_observation$Species <- as.character(random_observation$Species)
+
+random_observation_subset <- random_observation[c("Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Width", "Species")]
+
+random_observation_df <- data.frame(Value = as.character(random_observation_subset))
+rownames(random_observation_df) <- names(random_observation_subset)
+
+kable(random_observation_df, align = "c", col.names = "Value") %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("Random Observation" = 2))
+```
+
+Create and plot Classification Tree
+```{r}
+tree_model2 <- rpart(Species ~ Sepal.Length + Sepal.Width + Petal.Length + Petal.Width, data=iris, method="class")
+
+iris$Species_Pred_Tree2 <- predict(tree_model2, newdata=iris, type="class")
+
+confusion_matrix <- confusionMatrix(iris$Species_Pred_Tree2, iris$Species)
+print(confusion_matrix)
+
+rpart.plot(tree_model2, main="Decision Tree: Species Prediction", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette
+           = NULL, cex=0.7)
+```
+
+Create confusion matrix
+```{r}
+conf_matrix <- matrix(c(50, 0, 0,
+                        0, 49, 5,
+                        0, 1, 45),
+                      nrow = 3, byrow = TRUE,
+                      dimnames = list(Prediction = c("setosa", "versicolor", "virginica"),
+                                      Reference = c("setosa", "versicolor", "virginica")))
+
+conf_matrix_df <- as.data.frame(conf_matrix)
+
+kable(conf_matrix_df, align = "c") %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("Prediction" = 1, "Reference" = 3))
+```
+
+Build Random Forest to predict species
+```{r}
+iris <- iris %>%
+  mutate(Species = as.factor(Species))  
+
+set.seed(123) 
+train_index <- sample(nrow(iris), 0.7 * nrow(iris)) 
+train_data <- iris[train_index, ]
+test_data <- iris[-train_index, ]
+
+rf_model <- ranger(Species ~ ., 
+                   data = train_data, 
+                   num.trees = 500,  
+                   importance = "impurity") 
+
+predictions <- predict(rf_model, data = test_data)$predictions
+confusion_matrix <- table(predictions, test_data$Species)
+print(confusion_matrix)
+
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+var_importance <- importance(rf_model)
+print(var_importance)
+```
+
+Variable Importance Plot
+```{r}
+var_importance <- importance(rf_model)
+var_importance <- as.data.frame(var_importance)
+var_importance$Variable <- rownames(var_importance)
+colnames(var_importance) <- c("Importance", "Variable")
+
+var_importance <- var_importance %>%
+  filter(Variable %in% c("Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Width"))
+
+var_importance <- var_importance %>%
+  arrange(desc(Importance))
+
+barplot(
+  var_importance$Importance, 
+  main = "Variable Importance for Species Prediction", 
+  ylab = "Importance", 
+  col = "gray", 
+  las = 2,  
+  names.arg = var_importance$Variable,  
+  cex.names = 0.7
+)
+```
+
+Print formatted confusion matrix
+```{r}
+conf_matrix <- matrix(c(14, 0, 0,
+                        0, 17, 0,
+                        0, 1, 13),
+                      nrow = 3, byrow = TRUE,
+                      dimnames = list(Prediction = c("setosa", "versicolor", "virginica"),
+                                      Reference = c("setosa", "versicolor", "virginica")))
+
+conf_matrix_df <- as.data.frame(conf_matrix)
+
+kable(conf_matrix_df, align = "c") %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("Prediction" = 1, "Reference" = 3))
+```
+
+```{r}
+conf_matrix1 <- matrix(c(14, 0, 0, 1, 0, 0,
+                        0, 17, 0, 0, 1, 0,
+                        0, 1, 13, 0, 0.07, 0.93),
+                      nrow = 3, byrow = TRUE,
+                      dimnames = list(Node = c("Node 1", "Node 2", "Node 3"),
+                                      Count = c("N1", "N2", "N3", "P1", "P2", "P3")))
+
+conf_matrix_df1 <- as.data.frame(conf_matrix1)
+
+kable(conf_matrix_df1, align = "c") %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c(" " = 1, "Count" = 3, "Probability" = 3))
+```
+
+```{r}
+# Calculate Gini Impurity for each node
+calculate_gini <- function(probabilities) {
+  return(1 - sum(probabilities^2))
+}
+
+# Extract the probabilities for each node
+prob_node1 <- as.numeric(conf_matrix1["Node 1", 4:6])
+prob_node2 <- as.numeric(conf_matrix1["Node 2", 4:6])
+prob_node3 <- as.numeric(conf_matrix1["Node 3", 4:6])
+
+# Calculate Gini Impurity for each node
+gini_node1 <- calculate_gini(prob_node1)
+gini_node2 <- calculate_gini(prob_node2)
+gini_node3 <- calculate_gini(prob_node3)
+
+# Print the Gini Impurity for each node
+cat("Gini Impurity for Node 1:", gini_node1, "\n")
+cat("Gini Impurity for Node 2:", gini_node2, "\n")
+cat("Gini Impurity for Node 3:", gini_node3, "\n")
+```
+
+2. DATA CLEANING
+
+Values recorded as -99 or -88 are null and must be reflected as such
+```{r}
+pulse <- pulse2021_puf_27 %>%
+  select(-SCRAM) %>%
+  mutate_all(~as.numeric(as.character(.)))
+
+pulse <- pulse %>%
+  mutate_all(~na_if(., -99))
+
+pulse <- pulse %>%
+  mutate_all(~na_if(., -88))
+```
+
+Create age variable from birth year
+```{r}
+pulse$AGE <- (2021 - pulse$TBIRTH_YEAR)
+pulse <- select(pulse, -(TBIRTH_YEAR))
+```
+
+Deselect irrelevant variables from analysis 
+```{r}
+pulse <- select(pulse, -(WEEK), -(EST_MSA), -(ABIRTH_YEAR), -(AGENDER), -(AHISPANIC), -(ARACE), -(AEDUC), -(AHHLD_NUMPER), -(AHHLD_NUMKID), -(HWEIGHT))
+```
+
+Filter for complete cases of mental health variables
+```{r}
+pulse <- pulse[complete.cases(pulse[c("ANXIOUS", "WORRY", "INTEREST", "DOWN")]), ]
+```
+
+Reset mental health questions to a baseline of 0
+```{r}
+pulse$ANXIOUS<- (pulse$ANXIOUS - 1)
+pulse$WORRY <- (pulse$WORRY - 1)
+pulse$INTEREST <- (pulse$INTEREST - 1)
+pulse$DOWN <- (pulse$DOWN - 1)
+```
+
+Calculate GAD and PHQ risk scores
+```{r}
+pulse$GAD <- (pulse$ANXIOUS + pulse$WORRY)
+pulse$PHQ <- (pulse$INTEREST + pulse$DOWN)
+
+pulse$total.risk <- (pulse$PHQ + pulse$GAD)
+```
+
+Create binary variables illustrating at risk vs. not at risk on GAD scale and PHQ scale and numeric risk 0-2
+```{r}
+pulse$risk.GAD[pulse$GAD>=3] <- 1
+pulse$risk.GAD[pulse$GAD<=3] <- 0
+
+pulse$risk.PHQ[pulse$PHQ>=3] <- 1
+pulse$risk.PHQ[pulse$PHQ<=3] <- 0
+
+pulse$risk.numeric <- (pulse$risk.GAD + pulse$risk.PHQ)
+```
+
+Create binary risk variable: 0 = no risk, 1 = at risk on at least one scale
+```{r}
+pulse$risk.binary[pulse$risk.numeric==0] <- 0
+pulse$risk.binary[pulse$risk.numeric==1] <- 1
+pulse$risk.binary[pulse$risk.numeric==2] <- 1
+```
+
+```{r}
+pulse <- select(pulse, -(ANXIOUS), -(WORRY), -(INTEREST), -(DOWN))
+```
+
+Recode number of children in household to binary 0/1, either no children in household or one or more children in household
+```{r}
+pulse$THHLD_NUMKID[pulse$THHLD_NUMKID >= 1] <- 1
+```
+
+Recode the Race variables: 0 = White, 1 = Black, 2 = Asian, 3 = Hispanic, 4 = Mixed Race
+```{r}
+pulse$RRACE[pulse$RRACE == 1] <- 0
+pulse$RRACE[pulse$RRACE == 2] <- 1
+pulse$RRACE[pulse$RRACE == 3] <- 2
+pulse$RRACE[pulse$RHISPANIC == 2] <- 3
+
+pulse <- select(pulse, -(RHISPANIC))
+```
+
+2. MULTI-SELECT QUESTIONS
+
+Calculate the range and average multi-selected variables and check that in each case, more than one variable is selected at least once, and create a list of groups of multi-select questions
+```{r}
+calculate_range_avg <- function(data, cols) {
+  range_selected <- range(rowSums(!is.na(data[, cols])))
+  avg_selected <- mean(rowSums(!is.na(data[, cols])))
+  list(range = range_selected, average = avg_selected)
+}
+
+check_multiple_selection <- function(data, cols) {
+  any(rowSums(!is.na(data[, cols])) > 1)
+}
+
+column_groups <- list(
+  CHNGHOW = c("CHNGHOW1", "CHNGHOW2", "CHNGHOW3", "CHNGHOW4", "CHNGHOW5", "CHNGHOW6", "CHNGHOW7", "CHNGHOW8", "CHNGHOW9", "CHNGHOW10", "CHNGHOW11", "CHNGHOW12"),
+  WHYNOT = c("WHYNOT1", "WHYNOT2", "WHYNOT3", "WHYNOT4", "WHYNOT5", "WHYNOT6", "WHYNOT7", "WHYNOT8", "WHYNOT9", "WHYNOT10", "WHYNOT11"),
+  SSAPGM = c("SSAPGM1", "SSAPGM2", "SSAPGM3", "SSAPGM4", "SSAPGM5"),
+  SSAEXPCT = c("SSAEXPCT1", "SSAEXPCT2", "SSAEXPCT3", "SSAEXPCT4", "SSAEXPCT5"),
+  EIPSPND = c("EIPSPND1", "EIPSPND2", "EIPSPND3", "EIPSPND4", "EIPSPND5", "EIPSPND6", "EIPSPND7", "EIPSPND8", "EIPSPND9", "EIPSPND10", "EIPSPND11", "EIPSPND12", "EIPSPND13"),
+  WHYCHNGD = c("WHYCHNGD1", "WHYCHNGD2", "WHYCHNGD3", "WHYCHNGD4", "WHYCHNGD5", "WHYCHNGD6", "WHYCHNGD7", "WHYCHNGD8", "WHYCHNGD9", "WHYCHNGD10", "WHYCHNGD11", "WHYCHNGD12", "WHYCHNGD13"),
+  SPNDSRC = c("SPNDSRC1", "SPNDSRC2", "SPNDSRC3", "SPNDSRC4", "SPNDSRC5", "SPNDSRC6", "SPNDSRC7", "SPNDSRC8"),
+  FOODSUFRSN = c("FOODSUFRSN1", "FOODSUFRSN2", "FOODSUFRSN3", "FOODSUFRSN4", "FOODSUFRSN5"),
+  WHEREFREE = c("WHEREFREE1", "WHEREFREE2", "WHEREFREE3", "WHEREFREE4", "WHEREFREE5", "WHEREFREE6", "WHEREFREE7"),
+  HLTHINS = c("HLTHINS1", "HLTHINS2", "HLTHINS3", "HLTHINS4", "HLTHINS5", "HLTHINS6", "HLTHINS7", "HLTHINS8"),
+  ENROLL = c("ENROLL1", "ENROLL2", "ENROLL3"),
+  TEACH = c("TEACH1", "TEACH2", "TEACH3", "TEACH4", "TEACH5"),
+  COMP = c("COMP1", "COMP2", "COMP3"),
+  INTRNT = c("INTRNT1", "INTRNT2", "INTRNT3"),
+  PSPLANS = c("PSPLANS1", "PSPLANS2", "PSPLANS3", "PSPLANS4", "PSPLANS5", "PSPLANS6"),
+  PSCHNG = c("PSCHNG1", "PSCHNG2", "PSCHNG3", "PSCHNG4", "PSCHNG5", "PSCHNG6"),
+  PSWHYCHG = c("PSWHYCHG1", "PSWHYCHG2", "PSWHYCHG3", "PSWHYCHG4", "PSWHYCHG5", "PSWHYCHG6", "PSWHYCHG7", "PSWHYCHG8", "PSWHYCHG9")
+)
+```
+
+Count the number of NA values in each column
+```{r}
+na_count <- colSums(is.na(pulse))
+
+print(na_count)
+```
+
+Recode the variables in the WHYNOTB group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$WHYNOTB1[pulse$WHYNOTB1 == 1] <- 1
+pulse$WHYNOTB2[pulse$WHYNOTB2 == 1] <- 2
+pulse$WHYNOTB3[pulse$WHYNOTB3 == 1] <- 3
+pulse$WHYNOTB4[pulse$WHYNOTB4 == 1] <- 4
+pulse$WHYNOTB5[pulse$WHYNOTB5 == 1] <- 5
+pulse$WHYNOTB6[pulse$WHYNOTB6 == 1] <- 6
+
+pulse$WHYNOTB_selected <- apply(pulse[, c("WHYNOTB1", "WHYNOTB2", "WHYNOTB3", "WHYNOTB4", "WHYNOTB5", "WHYNOTB6")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0) 
+  if (length(selected) == 0) {
+    NA 
+  } else {
+    paste(row[selected], collapse = ",")
+  }
+})
+
+pulse <- select(pulse, -(WHYNOTB1), -(WHYNOTB2), -(WHYNOTB3), -(WHYNOTB4), -(WHYNOTB5), -(WHYNOTB6))
+```
+
+Recode the variables in the WHYNOT group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$WHYNOT1[pulse$WHYNOT1 == 1] <- 1
+pulse$WHYNOT2[pulse$WHYNOT2 == 1] <- 2
+pulse$WHYNOT3[pulse$WHYNOT3 == 1] <- 3
+pulse$WHYNOT4[pulse$WHYNOT4 == 1] <- 4
+pulse$WHYNOT5[pulse$WHYNOT5 == 1] <- 5
+pulse$WHYNOT6[pulse$WHYNOT6 == 1] <- 6
+pulse$WHYNOT7[pulse$WHYNOT7 == 1] <- 7
+pulse$WHYNOT8[pulse$WHYNOT8 == 1] <- 8
+pulse$WHYNOT9[pulse$WHYNOT9 == 1] <- 9
+pulse$WHYNOT10[pulse$WHYNOT10 == 1] <- 10
+pulse$WHYNOT11[pulse$WHYNOT11 == 1] <- 11
+
+pulse$WHYNOT_selected <- apply(pulse[, c("WHYNOT1", "WHYNOT2", "WHYNOT3", "WHYNOT4", "WHYNOT5", "WHYNOT6", "WHYNOT7", "WHYNOT8", "WHYNOT9", "WHYNOT10", "WHYNOT11")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0) 
+  if (length(selected) == 0) {
+    NA 
+  } else {
+    paste(row[selected], collapse = ",")
+  }
+})
+
+pulse <- select(pulse, -(WHYNOT1), -(WHYNOT2), -(WHYNOT3), -(WHYNOT4), -(WHYNOT5), -(WHYNOT6), -(WHYNOT7), -(WHYNOT8), -(WHYNOT9), -(WHYNOT10), -(WHYNOT11))
+```
+
+Recode the variables in the SSAPGM group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$SSAPGM1[pulse$SSAPGM1 == 1] <- 1
+pulse$SSAPGM2[pulse$SSAPGM2 == 1] <- 2
+pulse$SSAPGM3[pulse$SSAPGM3 == 1] <- 3
+pulse$SSAPGM4[pulse$SSAPGM4 == 1] <- 4
+pulse$SSAPGM5[pulse$SSAPGM5 == 1] <- 5
+
+pulse$SSAPGM_selected <- apply(pulse[, c("SSAPGM1", "SSAPGM2", "SSAPGM3", "SSAPGM4", "SSAPGM5")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0) 
+  if (length(selected) == 0) {
+    NA
+  } else {
+    paste(row[selected], collapse = ",")
+  }
+})
+
+pulse <- select(pulse, -(SSAPGM1), -(SSAPGM2), -(SSAPGM3), -(SSAPGM4), -(SSAPGM5))
+```
+
+Recode the variables in the SSA group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$SSAEXPCT2[pulse$SSAEXPCT2 == 1] <- 2
+pulse$SSAEXPCT3[pulse$SSAEXPCT3 == 1] <- 3
+pulse$SSAEXPCT4[pulse$SSAEXPCT4 == 1] <- 4
+pulse$SSAEXPCT5[pulse$SSAEXPCT5 == 1] <- 5
+
+pulse$SSAEXPCT_selected <- apply(pulse[, c("SSAEXPCT1", "SSAEXPCT2", "SSAEXPCT3", "SSAEXPCT4", "SSAEXPCT5")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0) 
+  if (length(selected) == 0) {
+    NA 
+  } else {
+    paste(row[selected], collapse = ",")
+  }
+})
+
+pulse <- select(pulse, -(SSAEXPCT1),-(SSAEXPCT2), -(SSAEXPCT3), -(SSAEXPCT4), -(SSAEXPCT5))
+```
+
+Recode the variables in the EIPSPND group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$EIPSPND2[pulse$EIPSPND2 == 1] <- 2
+pulse$EIPSPND3[pulse$EIPSPND3 == 1] <- 3
+pulse$EIPSPND4[pulse$EIPSPND4 == 1] <- 4
+pulse$EIPSPND5[pulse$EIPSPND5 == 1] <- 5
+pulse$EIPSPND6[pulse$EIPSPND6 == 1] <- 6
+pulse$EIPSPND7[pulse$EIPSPND7 == 1] <- 7
+pulse$EIPSPND8[pulse$EIPSPND8 == 1] <- 8
+pulse$EIPSPND9[pulse$EIPSPND9 == 1] <- 9
+pulse$EIPSPND10[pulse$EIPSPND10 == 1] <- 10
+pulse$EIPSPND11[pulse$EIPSPND11 == 1] <- 11
+pulse$EIPSPND12[pulse$EIPSPND10 == 1] <- 12
+pulse$EIPSPND13[pulse$EIPSPND11 == 1] <- 13
+
+pulse$EIPSPND_selected <- apply(pulse[, c("EIPSPND1", "EIPSPND2", "EIPSPND3", "EIPSPND4", "EIPSPND5", "EIPSPND6", "EIPSPND7", "EIPSPND8", "EIPSPND9", "EIPSPND10", "EIPSPND11", "EIPSPND12", "EIPSPND13")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)  
+  if (length(selected) == 0) {
+    NA 
+  } else {
+    paste(row[selected], collapse = ",") 
+  }
+})
+
+pulse <- select(pulse, -(EIPSPND1), -(EIPSPND2), -(EIPSPND3), -(EIPSPND4), -(EIPSPND5), -(EIPSPND6), -(EIPSPND7), -(EIPSPND8), -(EIPSPND9), -(EIPSPND10), -(EIPSPND11), -(EIPSPND12), -(EIPSPND13))
+```
+
+Recode the variables in the CHNGHOW group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$CHNGHOW2[pulse$CHNGHOW2 == 1] <- 2
+pulse$CHNGHOW3[pulse$CHNGHOW3 == 1] <- 3
+pulse$CHNGHOW4[pulse$CHNGHOW4 == 1] <- 4
+pulse$CHNGHOW5[pulse$CHNGHOW5 == 1] <- 5
+pulse$CHNGHOW6[pulse$CHNGHOW6 == 1] <- 6
+pulse$CHNGHOW7[pulse$CHNGHOW7 == 1] <- 7
+pulse$CHNGHOW8[pulse$CHNGHOW8 == 1] <- 8
+pulse$CHNGHOW9[pulse$CHNGHOW9 == 1] <- 9
+pulse$CHNGHOW10[pulse$CHNGHOW10 == 1] <- 10
+pulse$CHNGHOW11[pulse$CHNGHOW11 == 1] <- 11
+pulse$CHNGHOW12[pulse$CHNGHOW10 == 1] <- 12
+
+pulse$CHNGHOW_selected <- apply(pulse[, c("CHNGHOW1", "CHNGHOW2", "CHNGHOW3", "CHNGHOW4", "CHNGHOW5", "CHNGHOW6", "CHNGHOW7", "CHNGHOW8", "CHNGHOW9", "CHNGHOW10", "CHNGHOW11", "CHNGHOW12")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)   
+  if (length(selected) == 0) {
+    NA   
+  } else {
+    paste(row[selected], collapse = ",")   
+  }
+})
+
+pulse <- select(pulse, -(CHNGHOW1), -(CHNGHOW2), -(CHNGHOW3), -(CHNGHOW4), -(CHNGHOW5), -(CHNGHOW6), -(CHNGHOW7), -(CHNGHOW8), -(CHNGHOW9), -(CHNGHOW10), -(CHNGHOW11), -(CHNGHOW12))
+```
+
+Recode the variables in the WHYCHNGD group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$WHYCHNGD2[pulse$WHYCHNGD2 == 1] <- 2
+pulse$WHYCHNGD3[pulse$WHYCHNGD3 == 1] <- 3
+pulse$WHYCHNGD4[pulse$WHYCHNGD4 == 1] <- 4
+pulse$WHYCHNGD5[pulse$WHYCHNGD5 == 1] <- 5
+pulse$WHYCHNGD6[pulse$WHYCHNGD6 == 1] <- 6
+pulse$WHYCHNGD7[pulse$WHYCHNGD7 == 1] <- 7
+pulse$WHYCHNGD8[pulse$WHYCHNGD8 == 1] <- 8
+pulse$WHYCHNGD9[pulse$WHYCHNGD9 == 1] <- 9
+pulse$WHYCHNGD10[pulse$WHYCHNGD10 == 1] <- 10
+pulse$WHYCHNGD11[pulse$WHYCHNGD11 == 1] <- 11
+pulse$WHYCHNGD12[pulse$WHYCHNGD10 == 1] <- 12
+pulse$WHYCHNGD13[pulse$WHYCHNGD11 == 1] <- 13
+ 
+pulse$WHYCHNGD_selected <- apply(pulse[, c("WHYCHNGD1", "WHYCHNGD2", "WHYCHNGD3", "WHYCHNGD4", "WHYCHNGD5", "WHYCHNGD6", "WHYCHNGD7", "WHYCHNGD8", "WHYCHNGD9", "WHYCHNGD10", "WHYCHNGD11", "WHYCHNGD12", "WHYCHNGD13")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)   
+  if (length(selected) == 0) {
+    NA   
+  } else {
+    paste(row[selected], collapse = ",")   
+  }
+})
+
+pulse <- select(pulse, -(WHYCHNGD1), -(WHYCHNGD2), -(WHYCHNGD3), -(WHYCHNGD4), -(WHYCHNGD5), -(WHYCHNGD6), -(WHYCHNGD7), -(WHYCHNGD8), -(WHYCHNGD9), -(WHYCHNGD10), -(WHYCHNGD11), -(WHYCHNGD12), -(WHYCHNGD13))
+```
+
+Recode the variables in the SPNDSRC group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$SPNDSRC2[pulse$SPNDSRC2 == 1] <- 2
+pulse$SPNDSRC3[pulse$SPNDSRC3 == 1] <- 3
+pulse$SPNDSRC4[pulse$SPNDSRC4 == 1] <- 4
+pulse$SPNDSRC5[pulse$SPNDSRC5 == 1] <- 5
+pulse$SPNDSRC6[pulse$SPNDSRC6 == 1] <- 6
+pulse$SPNDSRC7[pulse$SPNDSRC7 == 1] <- 7
+pulse$SPNDSRC8[pulse$SPNDSRC8 == 1] <- 8
+ 
+pulse$SPNDSRC_selected <- apply(pulse[, c("SPNDSRC1", "SPNDSRC2", "SPNDSRC3", "SPNDSRC4", "SPNDSRC5", "SPNDSRC6", "SPNDSRC7", "SPNDSRC8")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)   
+  if (length(selected) == 0) {
+    NA   
+  } else {
+    paste(row[selected], collapse = ",")   
+  }
+})
+
+pulse <- select(pulse, -(SPNDSRC1), -(SPNDSRC2), -(SPNDSRC3), -(SPNDSRC4), -(SPNDSRC5), -(SPNDSRC6), -(SPNDSRC7), -(SPNDSRC8))
+```
+
+Recode the variables in the FOODSUFRSN group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$FOODSUFRSN2[pulse$FOODSUFRSN2 == 1] <- 2
+pulse$FOODSUFRSN3[pulse$FOODSUFRSN3 == 1] <- 3
+pulse$FOODSUFRSN4[pulse$FOODSUFRSN4 == 1] <- 4
+pulse$FOODSUFRSN5[pulse$FOODSUFRSN5 == 1] <- 5
+ 
+pulse$FOODSUFRSN_selected <- apply(pulse[, c("FOODSUFRSN1", "FOODSUFRSN2", "FOODSUFRSN3", "FOODSUFRSN4", "FOODSUFRSN5")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)   
+  if (length(selected) == 0) {
+    NA   
+  } else {
+    paste(row[selected], collapse = ",")   
+  }
+})
+
+pulse <- select(pulse, -(FOODSUFRSN1), -(FOODSUFRSN2), -(FOODSUFRSN3), -(FOODSUFRSN4), -(FOODSUFRSN5))
+```
+
+Recode the variables in the WHEREFREE group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$WHEREFREE2[pulse$WHEREFREE2 == 1] <- 2
+pulse$WHEREFREE3[pulse$WHEREFREE3 == 1] <- 3
+pulse$WHEREFREE4[pulse$WHEREFREE4 == 1] <- 4
+pulse$WHEREFREE5[pulse$WHEREFREE5 == 1] <- 5
+pulse$WHEREFREE6[pulse$WHEREFREE6 == 1] <- 6
+pulse$WHEREFREE7[pulse$WHEREFREE7 == 1] <- 7
+ 
+pulse$WHEREFREE_selected <- apply(pulse[, c("WHEREFREE1", "WHEREFREE2", "WHEREFREE3", "WHEREFREE4", "WHEREFREE5", "WHEREFREE6", "WHEREFREE7")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)   
+  if (length(selected) == 0) {
+    NA   
+  } else {
+    paste(row[selected], collapse = ",")   
+  }
+})
+
+pulse <- select(pulse, -(WHEREFREE1), -(WHEREFREE2), -(WHEREFREE3), -(WHEREFREE4), -(WHEREFREE5), -(WHEREFREE6), -(WHEREFREE7))
+```
+
+Recode the variables in the HLTHINS group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$HLTHINS2[pulse$HLTHINS2 == 1] <- 2
+pulse$HLTHINS3[pulse$HLTHINS3 == 1] <- 3
+pulse$HLTHINS4[pulse$HLTHINS4 == 1] <- 4
+pulse$HLTHINS5[pulse$HLTHINS5 == 1] <- 5
+pulse$HLTHINS6[pulse$HLTHINS6 == 1] <- 6
+pulse$HLTHINS7[pulse$HLTHINS7 == 1] <- 7
+pulse$HLTHINS8[pulse$HLTHINS8 == 1] <- 8
+ 
+pulse$HLTHINS_selected <- apply(pulse[, c("HLTHINS1", "HLTHINS2", "HLTHINS3", "HLTHINS4", "HLTHINS5", "HLTHINS6", "HLTHINS7", "HLTHINS8")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)   
+  if (length(selected) == 0) {
+    NA   
+  } else {
+    paste(row[selected], collapse = ",")   
+  }
+})
+
+pulse <- select(pulse, -(HLTHINS1), -(HLTHINS2), -(HLTHINS3), -(HLTHINS4), -(HLTHINS5), -(HLTHINS6), -(HLTHINS7), -(HLTHINS8))
+```
+
+Recode the variables in the ENROLL group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$ENROLL2[pulse$ENROLL2 == 1] <- 2
+pulse$ENROLL3[pulse$ENROLL3 == 1] <- 3
+ 
+pulse$ENROLL_selected <- apply(pulse[, c("ENROLL1", "ENROLL2", "ENROLL3")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)   
+  if (length(selected) == 0) {
+    NA   
+  } else {
+    paste(row[selected], collapse = ",")   
+  }
+})
+
+pulse <- select(pulse, -(ENROLL1), -(ENROLL2), -(ENROLL3))
+```
+
+Recode the variables in the TEACH group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$TEACH2[pulse$TEACH2 == 1] <- 2
+pulse$TEACH3[pulse$TEACH3 == 1] <- 3
+pulse$TEACH4[pulse$TEACH4 == 1] <- 4
+pulse$TEACH5[pulse$TEACH5 == 1] <- 5
+ 
+pulse$TEACH_selected <- apply(pulse[, c("TEACH1", "TEACH2", "TEACH3", "TEACH4", "TEACH5")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)   
+  if (length(selected) == 0) {
+    NA   
+  } else {
+    paste(row[selected], collapse = ",")   
+  }
+})
+
+pulse <- select(pulse, -(TEACH1), -(TEACH2), -(TEACH3), -(TEACH4), -(TEACH5))
+```
+
+Recode the variables in the COMP group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$COMP2[pulse$COMP2 == 1] <- 2
+pulse$COMP3[pulse$COMP3 == 1] <- 3
+ 
+pulse$COMP_selected <- apply(pulse[, c("COMP1", "COMP2", "COMP3")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)   
+  if (length(selected) == 0) {
+    NA   
+  } else {
+    paste(row[selected], collapse = ",")   
+  }
+})
+
+pulse <- select(pulse, -(COMP1), -(COMP2), -(COMP3))
+```
+
+Recode the variables in the INTRNT group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$INTRNT2[pulse$INTRNT2 == 1] <- 2
+pulse$INTRNT3[pulse$INTRNT3 == 1] <- 3
+ 
+pulse$INTRNT_selected <- apply(pulse[, c("INTRNT1", "INTRNT2", "INTRNT3")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)   
+  if (length(selected) == 0) {
+    NA   
+  } else {
+    paste(row[selected], collapse = ",")   
+  }
+})
+
+pulse <- select(pulse, -(INTRNT1), -(INTRNT2), -(INTRNT3))
+```
+
+Recode the variables in the PSPLANS group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$PSPLANS2[pulse$PSPLANS2 == 1] <- 2
+pulse$PSPLANS3[pulse$PSPLANS3 == 1] <- 3
+pulse$PSPLANS4[pulse$PSPLANS4 == 1] <- 4
+pulse$PSPLANS5[pulse$PSPLANS5 == 1] <- 5
+pulse$PSPLANS6[pulse$PSPLANS6 == 1] <- 6
+ 
+pulse$PSPLANS_selected <- apply(pulse[, c("PSPLANS1", "PSPLANS2", "PSPLANS3", "PSPLANS4", "PSPLANS5", "PSPLANS6")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)   
+  if (length(selected) == 0) {
+    NA   
+  } else {
+    paste(row[selected], collapse = ",")   
+  }
+})
+
+pulse <- select(pulse, -(PSPLANS1), -(PSPLANS2), -(PSPLANS3), -(PSPLANS4), -(PSPLANS5), -(PSPLANS6))
+```
+
+Recode the variables in the PSCHNG group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$PSCHNG2[pulse$PSCHNG2 == 1] <- 2
+pulse$PSCHNG3[pulse$PSCHNG3 == 1] <- 3
+pulse$PSCHNG4[pulse$PSCHNG4 == 1] <- 4
+pulse$PSCHNG5[pulse$PSCHNG5 == 1] <- 5
+pulse$PSCHNG6[pulse$PSCHNG6 == 1] <- 6
+ 
+pulse$PSCHNG_selected <- apply(pulse[, c("PSCHNG1", "PSCHNG2", "PSCHNG3", "PSCHNG4", "PSCHNG5", "PSCHNG6")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)   
+  if (length(selected) == 0) {
+    NA   
+  } else {
+    paste(row[selected], collapse = ",")   
+  }
+})
+
+pulse <- select(pulse, -(PSCHNG1), -(PSCHNG2), -(PSCHNG3), -(PSCHNG4), -(PSCHNG5), -(PSCHNG6))
+```
+
+Recode the variables in the PSWHYCHG group to only include as needed, collapse into one column, and deselect orginal variables
+```{r}
+pulse$PSWHYCHG2[pulse$PSWHYCHG2 == 1] <- 2
+pulse$PSWHYCHG3[pulse$PSWHYCHG3 == 1] <- 3
+pulse$PSWHYCHG4[pulse$PSWHYCHG4 == 1] <- 4
+pulse$PSWHYCHG5[pulse$PSWHYCHG5 == 1] <- 5
+pulse$PSWHYCHG6[pulse$PSWHYCHG6 == 1] <- 6
+pulse$PSWHYCHG7[pulse$PSWHYCHG7 == 1] <- 7
+pulse$PSWHYCHG8[pulse$PSWHYCHG8 == 1] <- 8
+pulse$PSWHYCHG9[pulse$PSWHYCHG9 == 1] <- 9
+ 
+pulse$PSWHYCHG_selected <- apply(pulse[, c("PSWHYCHG1", "PSWHYCHG2", "PSWHYCHG3", "PSWHYCHG4", "PSWHYCHG5", "PSWHYCHG6", "PSWHYCHG7", "PSWHYCHG8", "PSWHYCHG9")], 1, function(row) {
+  selected <- which(!is.na(row) & row != 0)   
+  if (length(selected) == 0) {
+    NA   
+  } else {
+    paste(row[selected], collapse = ",")   
+  }
+})
+
+pulse <- select(pulse, -(PSWHYCHG1), -(PSWHYCHG2), -(PSWHYCHG3), -(PSWHYCHG4), -(PSWHYCHG5), -(PSWHYCHG6), -(PSWHYCHG7), -(PSWHYCHG8), -(PSWHYCHG9))
+```
+
+Count NA
+```{r}
+na_count <- colSums(is.na(pulse))
+
+print(data.frame(Column = names(na_count), NA_Count = na_count))
+```
+
+Find and impute NA with median value, recount NA
+```{r}
+median_responses <- sapply(pulse, function(x) {
+  if (is.numeric(x)) {
+    median(x, na.rm = TRUE)
+  } else {
+    NA
+  }
+})
+
+pulse_imputed <- pulse
+for (col in names(pulse)) {
+  if (is.numeric(pulse_imputed[[col]])) {
+    pulse_imputed[[col]][is.na(pulse_imputed[[col]])] <- median_responses[col]
+  }
+}
+
+na_count <- colSums(is.na(pulse_imputed))
+
+print(na_count)
+```
+
+3. MODELING
+
+3.1 RANDOM FORESTS
+
+Deselect multi-select variables for initial analysis
+```{r}
+pulse_imputed_select <- subset(pulse_imputed, select = -c(WHYNOTB_selected, WHYNOT_selected, SSAPGM_selected, SSAEXPCT_selected, 
+                                                          EIPSPND_selected, CHNGHOW_selected, WHYCHNGD_selected, SPNDSRC_selected, 
+                                                          FOODSUFRSN_selected, WHEREFREE_selected, HLTHINS_selected, ENROLL_selected, 
+                                                          TEACH_selected, COMP_selected, INTRNT_selected, PSPLANS_selected, PSCHNG_selected, PSWHYCHG_selected))
+```
+
+Split train and test dataset
+```{r}
+set.seed(123) 
+train_index <- sample(nrow(pulse_imputed_select), 0.7 * nrow(pulse_imputed_select)) 
+train_pulse <- pulse_imputed_select[train_index, ]
+test_pulse <- pulse_imputed_select[-train_index, ]
+```
+
+Set predictors
+```{r}
+predictors <- setdiff(names(train_pulse), c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"))
+predictors <- setdiff(names(test_pulse), c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"))
+```
+
+Fit random forest model and print variable importance for GAD
+```{r}
+rf_gad <- ranger(GAD ~ ., data = train_pulse, importance = "impurity", num.trees = 500)
+
+predictions <- predict(rf_gad, data = test_pulse)$predictions
+confusion_matrix <- table(predictions, test_pulse$GAD)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+gad_importance <- rf_gad$variable.importance
+
+sorted_importance_gad <- sort(gad_importance, decreasing = TRUE)
+
+print("GAD Variable Importance:")
+print(sorted_importance_gad)
+```
+
+Fit random forest model and print sorted variable importance for PHQ
+```{r}
+rf_phq <- ranger(PHQ ~ ., data = train_pulse, importance = "impurity", num.trees = 500)
+
+predictions <- predict(rf_phq, data = test_pulse)$predictions
+confusion_matrix <- table(predictions, test_pulse$PHQ)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+phq_importance <- rf_phq$variable.importance
+
+sorted_importance_phq <- sort(phq_importance, decreasing = TRUE)
+
+print("PHQ Variable Importance:")
+print(sorted_importance_phq)
+```
+
+Fit random forest model and print sorted variable importance for Total Risk
+```{r}
+rf_total_risk <- ranger(total.risk ~ ., data = train_pulse, importance = "impurity", num.trees = 500)
+
+predictions <- predict(rf_total_risk, data = test_pulse)$predictions
+confusion_matrix <- table(predictions, test_pulse$total.risk)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+total_risk_importance <- rf_total_risk$variable.importance
+
+sorted_importance_total <- sort(total_risk_importance, decreasing = TRUE)
+
+print("Total Risk Variable Importance:")
+print(sorted_importance_total)
+```
+
+Fit random forest model and print sorted variable importance for GAD Risk
+```{r}
+rf_risk_gad <- ranger(risk.GAD ~ ., data = train_pulse, importance = "impurity", num.trees = 500)
+
+predictions <- predict(rf_risk_gad, data = test_pulse)$predictions
+confusion_matrix <- table(predictions, test_pulse$risk.GAD)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+risk_gad_importance <- rf_risk_gad$variable.importance
+
+sorted_importance_risk_gad <- sort(risk_gad_importance, decreasing = TRUE)
+
+print("Risk GAD Variable Importance:")
+print(sorted_importance_risk_gad)
+```
+
+Fit random forest model and print sorted variable importance for PHQ Risk
+```{r}
+rf_risk_phq <- ranger(risk.PHQ ~ ., data = train_pulse, importance = "impurity", num.trees = 500)
+
+predictions <- predict(rf_risk_phq, data = test_pulse)$predictions
+confusion_matrix <- table(predictions, test_pulse$risk.PHQ)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+risk_phq_importance <- rf_risk_phq$variable.importance
+
+sorted_importance_risk_phq <- sort(risk_phq_importance, decreasing = TRUE)
+
+print("Risk PHQ Variable Importance:")
+print(sorted_importance_risk_phq)
+```
+
+Fit random forest model and print sorted variable importance for Numeric Risk
+```{r}
+rf_risk_numeric <- ranger(risk.numeric ~ ., data = train_pulse, importance = "impurity", num.trees = 500)
+
+predictions <- predict(rf_risk_numeric, data = test_pulse)$predictions
+confusion_matrix <- table(predictions, test_pulse$risk.numeric)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+risk_numeric_importance <- rf_risk_numeric$variable.importance
+
+sorted_importance_risk_numeric <- sort(risk_numeric_importance, decreasing = TRUE)
+
+print("Risk Numeric Variable Importance:")
+print(sorted_importance_risk_numeric)
+```
+
+Fit random forest model and print sorted variable importance for Binary Risk
+```{r}
+rf_risk_binary <- ranger(risk.binary ~ ., data = train_pulse, importance = "impurity", num.trees = 500)
+
+predictions <- predict(rf_risk_binary, data = test_pulse)$predictions
+confusion_matrix <- table(predictions, test_pulse$risk.binary)
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+print(paste("Accuracy:", accuracy))
+
+risk_binary_importance <- rf_risk_binary$variable.importance
+
+sorted_importance_risk_binary <- sort(risk_binary_importance, decreasing = TRUE)
+
+print("Risk Numeric Variable Importance:")
+print(sorted_importance_risk_binary)
+```
+
+Create a function to extract top ten variables and their importance scores and store in a new dataframe
+```{r}
+extract_top_vars <- function(importance_df, excluded_vars = character(), N = 10) {
+  filtered_importance_df <- importance_df[!names(importance_df) %in% excluded_vars]
+  ordered_vars <- order(filtered_importance_df, decreasing = TRUE)
+  top_vars <- names(filtered_importance_df)[ordered_vars[1:N]]
+  top_scores <- as.numeric(filtered_importance_df[ordered_vars[1:N]])
+  
+  top_vars_df <- data.frame(
+    Variable = top_vars,
+    Importance = top_scores,
+    stringsAsFactors = FALSE
+  )
+  
+  return(top_vars_df)
+}
+```
+
+Extract the top ten variables and importance scores from each of the seven response variable Random Forests and format a table for the variables and scores of each response:
+```{r}
+gad_importance <- rf_gad$variable.importance
+
+top_10_gad_vars <- extract_top_vars(gad_importance, c("PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 10)
+
+kable(top_10_gad_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("GAD Variable Importance" = 2))
+
+top_20_gad_vars <- extract_top_vars(gad_importance, c("PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 20)
+
+kable(top_20_gad_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("GAD Variable Importance" = 2))
+```
+
+Extract the top ten variables and importance scores from the GAD Random Forest and format table
+```{r}
+phq_importance <- rf_phq$variable.importance
+
+top_10_phq_vars <- extract_top_vars(phq_importance, c("GAD", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 10)
+
+kable(top_10_phq_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("PHQ Variable Importance" = 2))
+
+top_20_phq_vars <- extract_top_vars(phq_importance, c("GAD", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 20)
+
+kable(top_20_phq_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("PHQ Variable Importance" = 2))
+```
+
+```{r}
+total_risk_importance <- rf_total_risk$variable.importance
+
+top_10_total_risk_vars <- extract_top_vars(total_risk_importance, c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 10)
+
+kable(top_10_total_risk_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("Total Risk Variable Importance" = 2))
+
+top_20_total_risk_vars <- extract_top_vars(total_risk_importance, c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 20)
+
+kable(top_20_total_risk_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("Total Risk Variable Importance" = 2))
+```
+
+```{r}
+risk_gad_importance <- rf_risk_gad$variable.importance
+
+top_10_risk_gad_vars <- extract_top_vars(risk_gad_importance, c("GAD", "PHQ", "total.risk", "risk.PHQ", "risk.numeric", "risk.binary"), 10)
+
+kable(top_10_risk_gad_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("GAD Risk Variable Importance" = 2))
+
+top_20_risk_gad_vars <- extract_top_vars(risk_gad_importance, c("GAD", "PHQ", "total.risk", "risk.PHQ", "risk.numeric", "risk.binary"), 20)
+
+kable(top_20_risk_gad_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("GAD Risk Variable Importance" = 2))
+```
+
+```{r}
+risk_phq_importance <- rf_risk_phq$variable.importance
+
+top_10_risk_phq_vars <- extract_top_vars(risk_phq_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.numeric", "risk.binary"), 10)
+
+kable(top_10_risk_phq_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("PHQ Risk Variable Importance" = 2))
+
+top_20_risk_phq_vars <- extract_top_vars(risk_phq_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.numeric", "risk.binary"), 20)
+
+kable(top_20_risk_phq_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("PHQ Risk Variable Importance" = 2))
+```
+
+```{r}
+risk_numeric_importance <- rf_risk_numeric$variable.importance
+
+top_10_risk_numeric_vars <- extract_top_vars(risk_numeric_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.binary"), 10)
+
+kable(top_10_risk_numeric_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("Numeric Risk Variable Importance" = 2))
+
+top_20_risk_numeric_vars <- extract_top_vars(risk_numeric_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.binary"), 20)
+
+kable(top_20_risk_numeric_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("Numeric Risk Variable Importance" = 2))
+```
+
+```{r}
+risk_binary_importance <- rf_risk_binary$variable.importance
+
+top_10_risk_binary_vars <- extract_top_vars(risk_binary_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric"), 10)
+
+kable(top_10_risk_binary_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("Binary Risk Variable Importance" = 2))
+
+top_20_risk_binary_vars <- extract_top_vars(risk_binary_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric"), 20)
+
+kable(top_20_risk_binary_vars, align = "c", col.names = c("Variable", "Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(c("Binary Risk Variable Importance" = 2))
+```
+
+Plot the top 20 variable importance scores for each response variable
+```{r}
+plot_top_vars <- function(importance_df, response_name, excluded_vars = character(), N = 20) {
+  filtered_importance_df <- importance_df[!names(importance_df) %in% excluded_vars]
+  ordered_vars <- order(filtered_importance_df, decreasing = TRUE)
+  top_vars <- names(filtered_importance_df)[ordered_vars[1:N]]
+
+  par(cex.axis = 0.7, cex.lab = 0.7)
+  
+  barplot(
+    filtered_importance_df[ordered_vars[1:N]], 
+    main = paste("Top Variables:", response_name), 
+    ylab = "Importance", 
+    col = "gray", 
+    las = 2,  
+    xlim = c(0, N * 1.2), 
+    ylim = c(0, max(filtered_importance_df[ordered_vars[1:N]]) * 1.2), 
+    names.arg = top_vars,  
+    cex.names = 0.7 
+  )
+}
+
+plot_top_vars(
+  gad_importance, 
+  "GAD", 
+  c("PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 
+  20
+)
+
+plot_top_vars(
+  phq_importance, 
+  "PHQ", 
+  c("GAD", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 
+  20
+)
+
+plot_top_vars(
+  total_risk_importance, 
+  "Total Risk", 
+  c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 
+  20
+)
+
+plot_top_vars(
+  risk_gad_importance, 
+  "Risk GAD", 
+  c("GAD", "PHQ", "total.risk", "risk.PHQ", "risk.numeric", "risk.binary"), 
+  20
+)
+
+plot_top_vars(
+  risk_phq_importance, 
+  "Risk PHQ", 
+  c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.numeric", "risk.binary"), 
+  20
+)
+
+plot_top_vars(
+  risk_numeric_importance, 
+  "Risk Numeric", 
+  c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.binary"), 
+  20
+)
+
+plot_top_vars(
+  risk_binary_importance, 
+  "Risk Binary", 
+  c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric"), 
+  20
+)
+```
+
+Plot the top ten variable importance scores for each response variable
+```{r}
+plot_top_vars <- function(importance_df, response_name, excluded_vars = character(), N = 10) {
+  filtered_importance_df <- importance_df[!names(importance_df) %in% excluded_vars]
+  ordered_vars <- order(filtered_importance_df, decreasing = TRUE)
+  top_vars <- names(filtered_importance_df)[ordered_vars[1:N]]
+
+  par(cex.axis = 0.7, cex.lab = 0.7)
+  
+  barplot(
+    filtered_importance_df[ordered_vars[1:N]], 
+    main = paste("Top Variables:", response_name), 
+    ylab = "Importance", 
+    col = "gray", 
+    las = 2,  
+    xlim = c(0, N * 1.2), 
+    ylim = c(0, max(filtered_importance_df[ordered_vars[1:N]]) * 1.2), 
+    names.arg = top_vars,  
+    cex.names = 0.7 
+  )
+}
+
+par(mfrow = c(2,3))
+
+plot_top_vars(
+  gad_importance, 
+  "GAD", 
+  c("PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 
+  10
+)
+
+plot_top_vars(
+  phq_importance, 
+  "PHQ", 
+  c("GAD", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 
+  10
+)
+
+plot_top_vars(
+  total_risk_importance, 
+  "Total Risk", 
+  c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 
+  10
+)
+
+plot_top_vars(
+  risk_gad_importance, 
+  "Risk GAD", 
+  c("GAD", "PHQ", "total.risk", "risk.PHQ", "risk.numeric", "risk.binary"), 
+  10
+)
+
+plot_top_vars(
+  risk_phq_importance, 
+  "Risk PHQ", 
+  c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.numeric", "risk.binary"), 
+  10
+)
+
+plot_top_vars(
+  risk_numeric_importance, 
+  "Risk Numeric", 
+  c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.binary"), 
+  10
+)
+```
+
+```{r}
+plot_top_vars <- function(importance_df, response_name, excluded_vars = character(), N = 10) {
+  filtered_importance_df <- importance_df[!names(importance_df) %in% excluded_vars]
+  ordered_vars <- order(filtered_importance_df, decreasing = TRUE)
+  top_vars <- names(filtered_importance_df)[ordered_vars[1:N]]
+
+  par(cex.axis = 0.7, cex.lab = 0.7)
+  
+  barplot(
+    filtered_importance_df[ordered_vars[1:N]], 
+    main = paste("Top Variables:", response_name), 
+    ylab = "Importance", 
+    col = "gray", 
+    las = 2,  
+    xlim = c(0, N * 1.2), 
+    ylim = c(0, max(filtered_importance_df[ordered_vars[1:N]]) * 1.2), 
+    names.arg = top_vars,  
+    cex.names = 0.7 
+  )
+}
+
+par(mfrow = c(2,3))
+
+plot_top_vars(
+  risk_binary_importance, 
+  "Risk Binary", 
+  c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric"), 
+  10
+)
+```
+
+Create a function to extract the ten variables with the highest importance scores from each response variable. Combine the variables into a single vector and count the occurrences of each variable. Sort in descending order and format into table. The table displays the number of responses out of seven that indicated each variable in its top ten.
+```{r}
+extract_top_vars <- function(importance_df, excluded_vars = character(), N = 10) {
+  importance_df <- as.data.frame(importance_df)
+  filtered_importance_df <- importance_df[!row.names(importance_df) %in% excluded_vars, , drop = FALSE]
+  filtered_importance_df <- filtered_importance_df[order(filtered_importance_df[, 1], decreasing = TRUE), , drop = FALSE]
+  top_vars_df <- head(filtered_importance_df, N)
+  top_vars_df$Variable <- row.names(top_vars_df)
+  colnames(top_vars_df) <- c("Importance", "Variable")
+  top_vars_df <- top_vars_df[, c("Variable", "Importance")]
+  
+  return(top_vars_df)
+}
+
+top_10_gad_vars <- extract_top_vars(gad_importance, c("PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 10)
+top_10_phq_vars <- extract_top_vars(phq_importance, c("GAD", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 10)
+top_10_total_risk_vars <- extract_top_vars(total_risk_importance, c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 10)
+top_10_risk_gad_vars <- extract_top_vars(risk_gad_importance, c("GAD", "PHQ", "total.risk", "risk.PHQ", "risk.numeric", "risk.binary"), 10)
+top_10_risk_phq_vars <- extract_top_vars(risk_phq_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.numeric", "risk.binary"), 10)
+top_10_risk_numeric_vars <- extract_top_vars(risk_numeric_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.binary"), 10)
+top_10_risk_binary_vars <- extract_top_vars(risk_binary_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric"), 10)
+
+all_top_vars10 <- c(
+  top_10_gad_vars$Variable,
+  top_10_phq_vars$Variable,
+  top_10_total_risk_vars$Variable,
+  top_10_risk_gad_vars$Variable,
+  top_10_risk_phq_vars$Variable,
+  top_10_risk_numeric_vars$Variable,
+  top_10_risk_binary_vars$Variable
+)
+
+variable_count10 <- table(all_top_vars10)
+variable_count_df10 <- as.data.frame(variable_count10)
+colnames(variable_count_df10) <- c("Variable", "Tally")
+
+variable_count_df10 <- variable_count_df10[order(variable_count_df10$Tally, decreasing = TRUE), ]
+
+kable(variable_count_df10[, c("Variable", "Tally")], align = "c", row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(header = c(" " = 2))
+```
+
+Calculate total importance across all seven lists and divide total importance by count to generate weighted importance
+```{r}
+extract_top_vars <- function(importance_df, excluded_vars = character(), N = 10) {
+  importance_df <- as.data.frame(importance_df)
+  filtered_importance_df <- importance_df[!row.names(importance_df) %in% excluded_vars, , drop = FALSE]
+  filtered_importance_df <- filtered_importance_df[order(filtered_importance_df[, 1], decreasing = TRUE), , drop = FALSE]
+  top_vars_df <- head(filtered_importance_df, N)
+  top_vars_df$Variable <- row.names(top_vars_df)
+  colnames(top_vars_df) <- c("Importance", "Variable")
+  top_vars_df <- top_vars_df[, c("Variable", "Importance")]
+  
+  return(top_vars_df)
+}
+
+top_10_gad_vars <- extract_top_vars(gad_importance, c("PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 10)
+top_10_phq_vars <- extract_top_vars(phq_importance, c("GAD", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 10)
+top_10_total_risk_vars <- extract_top_vars(total_risk_importance, c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 10)
+top_10_risk_gad_vars <- extract_top_vars(risk_gad_importance, c("GAD", "PHQ", "total.risk", "risk.PHQ", "risk.numeric", "risk.binary"), 10)
+top_10_risk_phq_vars <- extract_top_vars(risk_phq_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.numeric", "risk.binary"), 10)
+top_10_risk_numeric_vars <- extract_top_vars(risk_numeric_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.binary"), 10)
+top_10_risk_binary_vars <- extract_top_vars(risk_binary_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric"), 10)
+
+all_top_vars10 <- rbind(
+  top_10_gad_vars,
+  top_10_phq_vars,
+  top_10_total_risk_vars,
+  top_10_risk_gad_vars,
+  top_10_risk_phq_vars,
+  top_10_risk_numeric_vars,
+  top_10_risk_binary_vars
+)
+
+variable_importance_sum10 <- aggregate(Importance ~ Variable, data = all_top_vars10, sum)
+variable_count10 <- table(all_top_vars10$Variable)
+variable_count_df10 <- as.data.frame(variable_count10)
+colnames(variable_count_df10) <- c("Variable", "Tally")
+
+variable_importance_df10 <- merge(variable_importance_sum10, variable_count_df10, by = "Variable")
+
+variable_importance_df10$Weighted_Importance10 <- variable_importance_df10$Importance / variable_importance_df10$Tally
+
+variable_importance_df10 <- variable_importance_df10[order(variable_importance_df10$Weighted_Importance10, decreasing = TRUE), ]
+
+kable(variable_importance_df10[, c("Variable", "Weighted_Importance10")], align = "c", col.names = c("Variable", "Weighted Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(header = c("Top 10 Weighted Variable Importance Summary" = 2))
+```
+
+Plot the top 10 variable importance bar chart and boxplot of score distribution
+```{r}
+ggplot(variable_importance_df10[1:15, ], aes(x = reorder(Variable, -Weighted_Importance10), y = Weighted_Importance10)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Top 10 Variables by Weighted Importance", x = "Variable", y = "Weighted Importance") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(variable_importance_df10, aes(y = Weighted_Importance10)) +
+  geom_boxplot(fill = "lightgreen", color = "darkgreen") +
+  labs(title = "Distribution of Weighted Importance Scores", y = "Weighted Importance") +
+  theme_minimal()
+```
+
+Create a function to extract the 20 variables with the highest importance scores from each response variable. Combine the variables into a single vector and count the occurrences of each variable. Sort in descending order and format into table. The table displays the number of responses out of seven that indicated each variable in its top 20.
+```{r}
+extract_top_vars <- function(importance_df, excluded_vars = character(), N = 20) {
+  importance_df <- as.data.frame(importance_df)
+  filtered_importance_df <- importance_df[!row.names(importance_df) %in% excluded_vars, , drop = FALSE]
+  filtered_importance_df <- filtered_importance_df[order(filtered_importance_df[, 1], decreasing = TRUE), , drop = FALSE]
+  top_vars_df <- head(filtered_importance_df, N)
+  top_vars_df$Variable <- row.names(top_vars_df)
+  colnames(top_vars_df) <- c("Importance", "Variable")
+  top_vars_df <- top_vars_df[, c("Variable", "Importance")]
+  
+  return(top_vars_df)
+}
+
+top_20_gad_vars <- extract_top_vars(gad_importance, c("PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 20)
+top_20_phq_vars <- extract_top_vars(phq_importance, c("GAD", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 20)
+top_20_total_risk_vars <- extract_top_vars(total_risk_importance, c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 20)
+top_20_risk_gad_vars <- extract_top_vars(risk_gad_importance, c("GAD", "PHQ", "total.risk", "risk.PHQ", "risk.numeric", "risk.binary"), 20)
+top_20_risk_phq_vars <- extract_top_vars(risk_phq_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.numeric", "risk.binary"), 20)
+top_20_risk_numeric_vars <- extract_top_vars(risk_numeric_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.binary"), 20)
+top_20_risk_binary_vars <- extract_top_vars(risk_binary_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric"), 20)
+
+all_top_vars20 <- c(
+  top_20_gad_vars$Variable,
+  top_20_phq_vars$Variable,
+  top_20_total_risk_vars$Variable,
+  top_20_risk_gad_vars$Variable,
+  top_20_risk_phq_vars$Variable,
+  top_20_risk_numeric_vars$Variable,
+  top_20_risk_binary_vars$Variable
+)
+
+variable_count20 <- table(all_top_vars20)
+variable_count_df20 <- as.data.frame(variable_count20)
+colnames(variable_count_df20) <- c("Variable", "Tally")
+
+variable_count_df20 <- variable_count_df20[order(variable_count_df20$Tally, decreasing = TRUE), ]
+
+variable_count_df20$Rank <- seq_len(nrow(variable_count_df20))
+
+kable(variable_count_df20[, c("Rank", "Variable", "Tally")], align = "c", col.names = c("#", "Variable", "Tally"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(header = c("Instances of Variables in Top Predictors Lists (out of 7)" = 3))
+```
+
+Extract top 20 variables of importance for the seven response variables, combine all top variables and importances in a dataframe, merge and summarize importance and count data, calculate and sort weighted importance, and print a formatted summary table of weighted importance
+```{r}
+extract_top_vars <- function(importance_df, excluded_vars = character(), N = 20) {
+  importance_df <- as.data.frame(importance_df)
+  filtered_importance_df <- importance_df[!row.names(importance_df) %in% excluded_vars, , drop = FALSE]
+  filtered_importance_df <- filtered_importance_df[order(filtered_importance_df[, 1], decreasing = TRUE), , drop = FALSE]
+  top_vars_df <- head(filtered_importance_df, N)
+  top_vars_df$Variable <- row.names(top_vars_df)
+  colnames(top_vars_df) <- c("Importance", "Variable")
+  top_vars_df <- top_vars_df[, c("Variable", "Importance")]
+  
+  return(top_vars_df)
+}
+
+top_20_gad_vars <- extract_top_vars(gad_importance, c("PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 20)
+top_20_phq_vars <- extract_top_vars(phq_importance, c("GAD", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 20)
+top_20_total_risk_vars <- extract_top_vars(total_risk_importance, c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "risk.numeric", "risk.binary"), 20)
+top_20_risk_gad_vars <- extract_top_vars(risk_gad_importance, c("GAD", "PHQ", "total.risk", "risk.PHQ", "risk.numeric", "risk.binary"), 20)
+top_20_risk_phq_vars <- extract_top_vars(risk_phq_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.numeric", "risk.binary"), 20)
+top_20_risk_numeric_vars <- extract_top_vars(risk_numeric_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.binary"), 20)
+top_20_risk_binary_vars <- extract_top_vars(risk_binary_importance, c("GAD", "PHQ", "total.risk", "risk.GAD", "risk.PHQ", "risk.numeric"), 20)
+
+all_top_vars20 <- rbind(
+  top_20_gad_vars,
+  top_20_phq_vars,
+  top_20_total_risk_vars,
+  top_20_risk_gad_vars,
+  top_20_risk_phq_vars,
+  top_20_risk_numeric_vars,
+  top_20_risk_binary_vars
+)
+
+variable_importance_sum20 <- aggregate(Importance ~ Variable, data = all_top_vars20, sum)
+variable_count20 <- table(all_top_vars20$Variable)
+variable_count_df20 <- as.data.frame(variable_count20)
+colnames(variable_count_df20) <- c("Variable", "Tally")
+
+variable_importance_df20 <- merge(variable_importance_sum20, variable_count_df20, by = "Variable")
+
+variable_importance_df20$Weighted_Importance20 <- variable_importance_df20$Importance / variable_importance_df20$Tally
+
+variable_importance_df20 <- variable_importance_df20[order(variable_importance_df20$Weighted_Importance20, decreasing = TRUE), ]
+
+variable_importance_df20$Rank <- seq_len(nrow(variable_importance_df20))
+
+kable(variable_importance_df20[, c("Rank", "Variable", "Weighted_Importance20")], align = "c", col.names = c("#", "Variable", "Weighted Importance"), row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = TRUE) %>%
+  add_header_above(header = c("Weighted Importance Summary of Variables in Top Predictors Lists" = 3))
+```
+
+Plot the top 20 variable importance bar chart and boxplot of score distribution
+```{r}
+ggplot(variable_importance_df20[1:22, ], aes(x = reorder(Variable, -Weighted_Importance20), y = Weighted_Importance20)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Top 20 Variables by Weighted Importance", x = "Variable", y = "Weighted Importance") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(variable_importance_df20, aes(y = Weighted_Importance20)) +
+  geom_boxplot(fill = "lightgreen", color = "darkgreen") +
+  labs(title = "Distribution of Weighted Importance Scores", y = "Weighted Importance") +
+  theme_minimal()
+```
+
+Plot the formatted top 20 variable importance bar chart
+```{r}
+N <- nrow(variable_importance_df20)
+
+top_vars <- variable_importance_df20$Variable
+top_importance <- variable_importance_df20$Weighted_Importance20
+
+barplot(
+  height = top_importance,
+  main = "Top Variables by Weighted Importance",
+  ylab = "Weighted Importance",
+  col = "gray",
+  ylim = c(0, max(top_importance) * 1.2),
+  names.arg = top_vars,
+  cex.names = 0.7,
+  las = 2
+)
+```
+
+3.2 DECISION TREES
+
+Create a subset excluding mental health variables 
+```{r}
+train_pulse_trees <- train_pulse %>% select(c(-("MH_NOTGET"), -("MH_SVCS"), -("PRESCRIPT")))
+
+test_pulse_trees <- test_pulse %>% select(c(-("MH_NOTGET"), -("MH_SVCS"), -("PRESCRIPT")))
+```
+
+Set predictor variables
+```{r}
+predictor_vars <- train_pulse_trees %>% select(c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "total.risk", "risk.numeric", "risk.binary"))
+```
+
+Model decision tree for numeric risk including mental health variables
+```{r}
+tree_risk_numeric1 <- rpart(risk.numeric ~ ., 
+                       data = train_pulse[, !(names(train_pulse) %in% c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "total.risk", "risk.binary"))], 
+                       method = "class")
+
+print("Summary of decision tree model for risk.numeric")
+summary(tree_risk_numeric1)
+
+predictions_risk_numeric1 <- predict(tree_risk_numeric1, newdata = test_pulse, type = "class")
+
+accuracy_risk_numeric1 <- mean(predictions_risk_numeric1 == test_pulse$risk.numeric)
+cat("Accuracy for risk.numeric:", accuracy_risk_numeric1, "\n")
+
+rpart.plot(tree_risk_numeric1, box.palette = "Greys", shadow.col = "gray", nn = TRUE)
+```
+
+Model decision tree for numeric risk excluding mental health variables
+```{r}
+tree_risk_numeric2 <- rpart(risk.numeric ~ ., 
+                       data = train_pulse_trees[, !(names(train_pulse_trees) %in% c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "total.risk", "risk.binary"))], 
+                       method = "class")
+
+print("Summary of decision tree model for risk.numeric")
+summary(tree_risk_numeric2)
+
+predictions_risk_numeric2 <- predict(tree_risk_numeric2, newdata = test_pulse_trees, type = "class")
+
+accuracy_risk_numeric2 <- mean(predictions_risk_numeric2 == test_pulse_trees$risk.numeric)
+cat("Accuracy for risk.numeric:", accuracy_risk_numeric2, "\n")
+
+rpart.plot(tree_risk_numeric2, box.palette = "Greys", shadow.col = "gray", nn = TRUE)
+```
+
+Plot the two decision trees for numeric risk
+```{r}
+par(mfrow = c(1,2))
+
+rpart.plot(tree_risk_numeric1, main="Decision Tree: Numeric Risk", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+
+rpart.plot(tree_risk_numeric2, main="Decision Tree: Numeric Risk", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+```
+
+Test varying complexity parameters
+```{r}
+control_params <- rpart.control(minsplit = 20, minbucket = 7, cp = 0.01)
+
+tree_risk_numericA <- rpart(risk.numeric ~ ., 
+                       data = train_pulse[, !(names(train_pulse) %in% c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "total.risk", "risk.binary"))], 
+                       method = "class")
+
+print("Summary of decision tree model for risk.numeric")
+summary(tree_risk_numericA)
+
+predictions_risk_numericA <- predict(tree_risk_numericA, newdata = test_pulse, type = "class")
+
+accuracy_risk_numericA <- mean(predictions_risk_numericA == test_pulse$risk.numeric)
+cat("Accuracy for risk.numeric:", accuracy_risk_numericA, "\n")
+
+rpart.plot(tree_risk_numericA, box.palette = "Greys", shadow.col = "gray", nn = TRUE)
+
+tree_risk_numericB <- rpart(risk.numeric ~ ., 
+                       data = train_pulse_trees[, !(names(train_pulse_trees) %in% c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "total.risk", "risk.binary"))], 
+                       method = "class")
+
+print("Summary of decision tree model for risk.numeric")
+summary(tree_risk_numericB)
+
+predictions_risk_numericB <- predict(tree_risk_numericB, newdata = test_pulse_trees, type = "class")
+
+accuracy_risk_numericB <- mean(predictions_risk_numericB == test_pulse_trees$risk.numeric)
+cat("Accuracy for risk.numeric:", accuracy_risk_numericB, "\n")
+
+rpart.plot(tree_risk_numericB, box.palette = "Greys", shadow.col = "gray", nn = TRUE)
+```
+
+```{r}
+control_params <- rpart.control(minsplit = 10, minbucket = 5, cp = 0.001)
+
+tree_risk_numericX <- rpart(risk.numeric ~ ., 
+                       data = train_pulse[, !(names(train_pulse) %in% c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "total.risk", "risk.binary"))], 
+                       method = "class")
+
+print("Summary of decision tree model for risk.numeric")
+summary(tree_risk_numericX)
+
+predictions_risk_numericX <- predict(tree_risk_numericX, newdata = test_pulse, type = "class")
+
+accuracy_risk_numericX <- mean(predictions_risk_numericX == test_pulse$risk.numeric)
+cat("Accuracy for risk.numeric:", accuracy_risk_numericX, "\n")
+
+rpart.plot(tree_risk_numericX, box.palette = "Greys", shadow.col = "gray", nn = TRUE)
+
+tree_risk_numericY <- rpart(risk.numeric ~ ., 
+                       data = train_pulse_trees[, !(names(train_pulse_trees) %in% c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "total.risk", "risk.binary"))], 
+                       method = "class")
+
+print("Summary of decision tree model for risk.numeric")
+summary(tree_risk_numericY)
+
+predictions_risk_numericY <- predict(tree_risk_numericY, newdata = test_pulse_trees, type = "class")
+
+accuracy_risk_numericY <- mean(predictions_risk_numericY == test_pulse_trees$risk.numeric)
+cat("Accuracy for risk.numeric:", accuracy_risk_numericY, "\n")
+
+rpart.plot(tree_risk_numericY, box.palette = "Greys", shadow.col = "gray", nn = TRUE)
+```
+
+Model decision tree for binary risk including mental health variables
+```{r}
+tree_risk_binary1 <- rpart(risk.binary ~ ., 
+                       data = train_pulse[, !(names(train_pulse) %in% c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "total.risk", "risk.numeric"))], 
+                       method = "class")
+
+print("Summary of decision tree model for risk.binary")
+summary(tree_risk_binary1)
+
+predictions_risk_binary1 <- predict(tree_risk_binary1, newdata = test_pulse, type = "class")
+
+accuracy_risk_binary1 <- mean(predictions_risk_binary1 == test_pulse$risk.binary)
+cat("Accuracy for risk.binary:", accuracy_risk_binary1, "\n")
+
+rpart.plot(tree_risk_binary1, box.palette = "Greys", shadow.col = "gray", nn = TRUE)
+```
+
+Model decision tree for binary risk including mental health variables
+```{r}
+tree_risk_binary2 <- rpart(risk.binary ~ ., 
+                       data = train_pulse_trees[, !(names(train_pulse_trees) %in% c("GAD", "PHQ", "risk.GAD", "risk.PHQ", "total.risk", "risk.numeric"))], 
+                       method = "class")
+
+print("Summary of decision tree model for risk.binary")
+summary(tree_risk_binary2)
+
+predictions_risk_binary2 <- predict(tree_risk_binary2, newdata = test_pulse_trees, type = "class")
+
+accuracy_risk_binary2 <- mean(predictions_risk_binary2 == test_pulse_trees$risk.binary)
+cat("Accuracy for risk.binary:", accuracy_risk_binary2, "\n")
+
+rpart.plot(tree_risk_binary2, box.palette = "Greys", shadow.col = "gray", nn = TRUE)
+```
+
+Plot the two decision trees for binary risk
+```{r}
+par(mfrow = c(1,2))
+
+rpart.plot(tree_risk_binary1, main="Decision Tree: Binary Risk", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+
+rpart.plot(tree_risk_binary2, main="Decision Tree: Binary Risk", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+```
+
+Model decision tree for GAD risk including mental health variables
+```{r}
+tree_risk_gad1 <- rpart(risk.GAD ~ ., 
+                       data = train_pulse[, !(names(train_pulse) %in% c("GAD", "PHQ", "risk.binary", "risk.PHQ", "total.risk", "risk.numeric"))], 
+                       method = "class")
+
+print("Summary of decision tree model for risk.gad")
+summary(tree_risk_gad1)
+
+predictions_risk_gad1 <- predict(tree_risk_gad1, newdata = test_pulse, type = "class")
+
+accuracy_risk_gad1 <- mean(predictions_risk_gad1 == test_pulse$risk.GAD)
+cat("Accuracy for risk.gad:", accuracy_risk_gad1, "\n")
+
+rpart.plot(tree_risk_gad1, box.palette = "Greys", shadow.col = "gray", nn = TRUE)
+```
+
+Model decision tree for GAD risk excluding mental health variables
+```{r}
+tree_risk_gad2 <- rpart(risk.GAD ~ ., 
+                       data = train_pulse_trees[, !(names(train_pulse_trees) %in% c("GAD", "PHQ", "risk.binary", "risk.PHQ", "total.risk", "risk.numeric"))], 
+                       method = "class")
+
+print("Summary of decision tree model for risk.gad")
+summary(tree_risk_gad2)
+
+predictions_risk_gad2 <- predict(tree_risk_gad2, newdata = test_pulse_trees, type = "class")
+
+accuracy_risk_gad2 <- mean(predictions_risk_gad2 == test_pulse_trees$risk.GAD)
+cat("Accuracy for risk.gad:", accuracy_risk_gad2, "\n")
+
+rpart.plot(tree_risk_gad2, box.palette = "Greys", shadow.col = "gray", nn = TRUE)
+```
+
+Plot the two decision trees for Risk GAD
+```{r}
+par(mfrow = c(1,2))
+
+rpart.plot(tree_risk_gad1, main="Decision Tree: Risk GAD", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+
+rpart.plot(tree_risk_gad2, main="Decision Tree: Risk GAD", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+```
+
+Model decision tree for PHQ risk including mental health variables
+```{r}
+tree_risk_phq1 <- rpart(risk.PHQ ~ ., 
+                       data = train_pulse[, !(names(train_pulse) %in% c("GAD", "PHQ", "risk.binary", "risk.GAD", "total.risk", "risk.numeric"))], 
+                       method = "class")
+
+print("Summary of decision tree model for risk.phq")
+summary(tree_risk_phq1)
+
+predictions_risk_phq1 <- predict(tree_risk_phq1, newdata = test_pulse, type = "class")
+
+accuracy_risk_phq1 <- mean(predictions_risk_phq1 == test_pulse$risk.PHQ)
+cat("Accuracy for risk.phq:", accuracy_risk_phq1, "\n")
+
+rpart.plot(tree_risk_phq1, box.palette = "Greys", shadow.col = "gray", nn = TRUE)
+```
+
+Model decision tree for PHQ risk excluding mental health variables
+```{r}
+tree_risk_phq2 <- rpart(risk.PHQ ~ ., 
+                       data = train_pulse_trees[, !(names(train_pulse_trees) %in% c("GAD", "PHQ", "risk.binary", "risk.GAD", "total.risk", "risk.numeric"))], 
+                       method = "class")
+
+print("Summary of decision tree model for risk.phq")
+summary(tree_risk_phq2)
+
+predictions_risk_phq2 <- predict(tree_risk_phq2, newdata = test_pulse_trees, type = "class")
+
+accuracy_risk_phq2 <- mean(predictions_risk_phq2 == test_pulse_trees$risk.PHQ)
+cat("Accuracy for risk.phq:", accuracy_risk_phq2, "\n")
+
+rpart.plot(tree_risk_phq2, box.palette = "Greys", shadow.col = "gray", nn = TRUE)
+```
+
+Plot the two decision trees for Risk PHQ
+```{r}
+par(mfrow = c(1,2))
+
+rpart.plot(tree_risk_phq1, main="Decision Tree: Risk PHQ", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+
+rpart.plot(tree_risk_phq2, main="Decision Tree: Risk PHQ", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+```
+
+Plot the four decision trees including mental health variables
+```{r}
+par(mfrow = c(2,4))
+
+rpart.plot(tree_risk_numeric1, main="Decision Tree: Numeric Risk", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+
+rpart.plot(tree_risk_binary1, main="Decision Tree: Binary Risk", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+
+rpart.plot(tree_risk_gad1, main="Decision Tree: Risk GAD", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+
+rpart.plot(tree_risk_phq1, main="Decision Tree: Risk PHQ", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+```
+
+Plot the four decision trees excluding mental health variables
+```{r}
+par(mfrow = c(1,2))
+
+rpart.plot(tree_risk_numeric2, main="Decision Tree: Numeric Risk", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+
+rpart.plot(tree_risk_binary2, main="Decision Tree: Binary Risk", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+```
+
+```{r}
+par(mfrow = c(1,2))
+
+rpart.plot(tree_risk_gad2, main="Decision Tree: Risk GAD", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+
+rpart.plot(tree_risk_phq2, main="Decision Tree: Risk PHQ", type=3, extra=101, under=TRUE, fallen.leaves=TRUE, box.palette = NULL, cex=0.7)
+```
+
+
+
+
+
